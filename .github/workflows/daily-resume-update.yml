@@ -54,6 +54,7 @@ jobs:
         run: |
           if exist "%GITHUB_WORKSPACE%\.git" (
             cd "%GITHUB_WORKSPACE%"
+            git remote set-url origin https://x-access-token:%GITHUB_TOKEN%@github.com/%GITHUB_REPOSITORY%.git
             git fetch --depth 1 origin main
             git reset --hard origin/main
             git clean -fdx -e node_modules
