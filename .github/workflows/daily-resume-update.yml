@@ -49,6 +49,8 @@ jobs:
       # because Git for Windows has a known 'dofork' bug with
       # git-submodule that causes exit code 254 on self-hosted runners.
       - name: 📥 Checkout repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if exist "%GITHUB_WORKSPACE%\.git" (
             cd "%GITHUB_WORKSPACE%"
@@ -56,7 +58,7 @@ jobs:
             git reset --hard origin/main
             git clean -fdx -e node_modules
           ) else (
-            git clone --depth 1 https://github.com/%GITHUB_REPOSITORY%.git "%GITHUB_WORKSPACE%"
+            git clone --depth 1 https://x-access-token:%GITHUB_TOKEN%@github.com/%GITHUB_REPOSITORY%.git "%GITHUB_WORKSPACE%"
           )
 
       # ── Step 2: Setup Node.js ─────────────────────────────
