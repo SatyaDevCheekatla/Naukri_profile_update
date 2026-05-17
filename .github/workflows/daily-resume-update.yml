@@ -38,9 +38,19 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # ── Step 0: Fix Git for Windows fork issue ────────────
+      - name: 🔧 Configure Git for Windows
+        run: |
+          git config --global core.longpaths true
+          git config --global http.postBuffer 524288000
+        shell: cmd
+
       # ── Step 1: Checkout Code ─────────────────────────────
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
 
       # ── Step 2: Setup Node.js ─────────────────────────────
       - name: 🟢 Setup Node.js 20
