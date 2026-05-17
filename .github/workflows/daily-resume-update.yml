@@ -1,0 +1,160 @@
+# ═══════════════════════════════════════════════════════════════
+# Naukri.com — Daily Resume Upload Workflow
+# ═══════════════════════════════════════════════════════════════
+# Schedule: 8:30 AM IST & 3:00 PM IST daily
+# Cron uses UTC → IST is UTC+5:30
+#   8:30 AM IST = 3:00 AM UTC
+#   3:00 PM IST = 9:30 AM UTC
+# ═══════════════════════════════════════════════════════════════
+
+name: 📄 Daily Resume Upload - Naukri.com
+
+on:
+  # ── Scheduled Runs ────────────────────────────────────────
+  schedule:
+    - cron: '0 3 * * *'    # 8:30 AM IST → 3:00 AM UTC
+    - cron: '30 9 * * *'   # 3:00 PM IST → 9:30 AM UTC
+
+  # ── Manual Trigger (for testing) ──────────────────────────
+  workflow_dispatch:
+    inputs:
+      run_reason:
+        description: 'Reason for manual run'
+        required: false
+        default: 'Manual trigger'
+
+jobs:
+  update-resume:
+    name: 🚀 Upload Resume to Naukri
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ── Step 1: Checkout Code ─────────────────────────────
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Step 2: Setup Node.js ─────────────────────────────
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── Step 3: Install Dependencies ──────────────────────
+      - name: 📦 Install npm dependencies
+        run: npm ci
+
+      # ── Step 4: Install Playwright Browsers ───────────────
+      - name: 🌐 Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # ── Step 5: Run Resume Upload Test ────────────────────
+      - name: 🎯 Execute resume upload automation
+        env:
+          NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
+          NAUKRI_PASSWORD: ${{ secrets.NAUKRI_PASSWORD }}
+        run: npx playwright test tests/update-resume.spec.ts
+
+      # ── Step 6: Upload Artifacts on Failure ───────────────
+      - name: 📸 Upload failure screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: failure-screenshots-${{ github.run_number }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+      # ── Step 7: Upload HTML Report ────────────────────────
+      - name: 📊 Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.run_number }}
+          path: playwright-report/
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════
+  # Email Notification Job
+  # ═══════════════════════════════════════════════════════════
+  notify:
+    name: 📧 Send Email Notification
+    runs-on: ubuntu-latest
+    needs: update-resume
+    if: always()
+
+    steps:
+      - name: 📧 Send build status email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          # ── SMTP Configuration (Gmail) ────────────────────
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+
+          # ── Email Content ─────────────────────────────────
+          subject: |
+            ${{ needs.update-resume.result == 'success' && '✅' || '❌' }} Naukri Resume Upload - ${{ needs.update-resume.result }} | ${{ github.run_number }}
+          to: ${{ secrets.EMAIL_USERNAME }}
+          from: Naukri Bot <${{ secrets.EMAIL_USERNAME }}>
+          html_body: |
+            <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              
+              <!-- Header -->
+              <div style="background: ${{ needs.update-resume.result == 'success' && 'linear-gradient(135deg, #00b09b, #96c93d)' || 'linear-gradient(135deg, #e74c3c, #c0392b)' }}; 
+                          border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">
+                  ${{ needs.update-resume.result == 'success' && '✅ Resume Upload Successful!' || '❌ Resume Upload Failed!' }}
+                </h1>
+              </div>
+              
+              <!-- Body -->
+              <div style="background: #f8f9fa; padding: 25px; border: 1px solid #e9ecef; border-radius: 0 0 12px 12px;">
+                
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                  <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold; width: 40%;">📋 Status</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">
+                      <span style="background: ${{ needs.update-resume.result == 'success' && '#28a745' || '#dc3545' }}; 
+                                   color: white; padding: 4px 12px; border-radius: 20px; font-size: 13px;">
+                        ${{ needs.update-resume.result }}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold;">📅 Date & Time</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold;">🔢 Run Number</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">#${{ github.run_number }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold;">🔀 Branch</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">${{ github.ref_name }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; font-weight: bold;">⚡ Trigger</td>
+                    <td style="padding: 10px;">${{ github.event_name == 'schedule' && '⏰ Scheduled' || '🖱️ Manual' }}</td>
+                  </tr>
+                </table>
+
+                <!-- Action Button -->
+                <div style="text-align: center; margin-top: 15px;">
+                  <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" 
+                     style="background: #0366d6; color: white; padding: 12px 30px; border-radius: 6px; 
+                            text-decoration: none; font-weight: bold; display: inline-block;">
+                    🔗 View Full Run Details
+                  </a>
+                </div>
+              </div>
+
+              <!-- Footer -->
+              <p style="text-align: center; color: #6c757d; font-size: 12px; margin-top: 15px;">
+                Automated by Naukri Resume Bot • GitHub Actions
+              </p>
+            </div>

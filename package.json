@@ -1,0 +1,26 @@
+{
+  "name": "naukri-resume-update",
+  "version": "1.0.0",
+  "description": "Automated daily resume upload on Naukri.com using Playwright with stealth mode",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "update-resume": "npx playwright test tests/update-resume.spec.ts --headed",
+    "update-resume:headless": "npx playwright test tests/update-resume.spec.ts"
+  },
+  "keywords": ["naukri", "resume", "playwright", "automation"],
+  "author": "Satya",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  },
+  "dependencies": {
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "dotenv": "^16.4.7"
+  }
+}
