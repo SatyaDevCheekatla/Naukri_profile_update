@@ -32,25 +32,32 @@ jobs:
   update-resume:
     name: 🚀 Upload Resume to Naukri
     # ── Self-hosted runner on your Windows PC ──────────────
-    # This ensures login works from your residential IP,
-    # bypassing Naukri's data center IP blocking.
+    # Naukri.com blocks cloud/data center IPs, so we MUST
+    # run from your residential IP via a self-hosted runner.
     runs-on: self-hosted
     timeout-minutes: 10
 
-    steps:
-      # ── Step 0: Fix Git for Windows fork issue ────────────
-      - name: 🔧 Configure Git for Windows
-        run: |
-          git config --global core.longpaths true
-          git config --global http.postBuffer 524288000
+    # All 'run' steps execute inside the cloned repo directory
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
         shell: cmd
 
-      # ── Step 1: Checkout Code ─────────────────────────────
+    steps:
+      # ── Step 1: Checkout Code (manual clone) ──────────────
+      # Using manual git clone instead of actions/checkout@v4
+      # because Git for Windows has a known 'dofork' bug with
+      # git-submodule that causes exit code 254 on self-hosted runners.
       - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-          fetch-depth: 1
+        run: |
+          if exist "%GITHUB_WORKSPACE%\.git" (
+            cd "%GITHUB_WORKSPACE%"
+            git fetch --depth 1 origin main
+            git reset --hard origin/main
+            git clean -fdx -e node_modules
+          ) else (
+            git clone --depth 1 https://github.com/%GITHUB_REPOSITORY%.git "%GITHUB_WORKSPACE%"
+          )
 
       # ── Step 2: Setup Node.js ─────────────────────────────
       - name: 🟢 Setup Node.js 20
