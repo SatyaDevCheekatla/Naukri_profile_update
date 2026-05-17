@@ -1,10 +1,10 @@
 # ═══════════════════════════════════════════════════════════════
 # Naukri.com — Daily Resume Upload Workflow
 # ═══════════════════════════════════════════════════════════════
-# Schedule: 8:30 AM IST & 3:00 PM IST daily
+# Schedule: 8:30 AM IST & 3:30 PM IST daily
 # Cron uses UTC → IST is UTC+5:30
 #   8:30 AM IST = 3:00 AM UTC
-#   3:00 PM IST = 9:30 AM UTC
+#   3:30 PM IST = 10:00 AM UTC
 #
 # IMPORTANT: This workflow uses a SELF-HOSTED runner because
 # Naukri.com blocks login attempts from cloud/data center IPs
@@ -18,7 +18,7 @@ on:
   # ── Scheduled Runs ────────────────────────────────────────
   schedule:
     - cron: '0 3 * * *'    # 8:30 AM IST → 3:00 AM UTC
-    - cron: '30 9 * * *'   # 3:00 PM IST → 9:30 AM UTC
+    - cron: '0 10 * * *'   # 3:30 PM IST → 10:00 AM UTC
 
   # ── Manual Trigger (for testing) ──────────────────────────
   workflow_dispatch:
