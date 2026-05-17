@@ -5,6 +5,11 @@
 # Cron uses UTC → IST is UTC+5:30
 #   8:30 AM IST = 3:00 AM UTC
 #   3:00 PM IST = 9:30 AM UTC
+#
+# IMPORTANT: This workflow uses a SELF-HOSTED runner because
+# Naukri.com blocks login attempts from cloud/data center IPs
+# (GitHub-hosted runners). The self-hosted runner runs on your
+# local Windows PC where the test already passes.
 # ═══════════════════════════════════════════════════════════════
 
 name: 📄 Daily Resume Upload - Naukri.com
@@ -26,7 +31,10 @@ on:
 jobs:
   update-resume:
     name: 🚀 Upload Resume to Naukri
-    runs-on: ubuntu-latest
+    # ── Self-hosted runner on your Windows PC ──────────────
+    # This ensures login works from your residential IP,
+    # bypassing Naukri's data center IP blocking.
+    runs-on: self-hosted
     timeout-minutes: 10
 
     steps:
@@ -39,7 +47,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       # ── Step 3: Install Dependencies ──────────────────────
       - name: 📦 Install npm dependencies
@@ -47,7 +54,7 @@ jobs:
 
       # ── Step 4: Install Playwright Browsers ───────────────
       - name: 🌐 Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       # ── Step 5: Run Resume Upload Test ────────────────────
       - name: 🎯 Execute resume upload automation
@@ -77,7 +84,7 @@ jobs:
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
-  # Email Notification Job
+  # Email Notification Job (runs on GitHub-hosted runner)
   # ═══════════════════════════════════════════════════════════
   notify:
     name: 📧 Send Email Notification
