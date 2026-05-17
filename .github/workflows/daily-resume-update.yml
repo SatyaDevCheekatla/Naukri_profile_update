@@ -127,7 +127,7 @@ jobs:
                   </tr>
                   <tr>
                     <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold;">📅 Date & Time</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">Run #${{ github.run_number }} on ${{ github.ref_name }}</td>
                   </tr>
                   <tr>
                     <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold;">🔢 Run Number</td>
