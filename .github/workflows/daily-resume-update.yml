@@ -1,15 +1,6 @@
 # ═══════════════════════════════════════════════════════════════
 # Naukri.com — Daily Resume Upload Workflow
-# ═══════════════════════════════════════════════════════════════
-# Schedule: 8:30 AM IST & 3:30 PM IST daily
-# Cron uses UTC → IST is UTC+5:30
-#   8:30 AM IST = 3:00 AM UTC
-#   3:30 PM IST = 10:00 AM UTC
-#
-# IMPORTANT: This workflow uses a SELF-HOSTED runner because
-# Naukri.com blocks login attempts from cloud/data center IPs
-# (GitHub-hosted runners). The self-hosted runner runs on your
-# local Windows PC where the test already passes.
+# Runs Fully on GitHub Cloud Runners
 # ═══════════════════════════════════════════════════════════════
 
 name: 📄 Daily Resume Upload - Naukri.com
@@ -17,10 +8,10 @@ name: 📄 Daily Resume Upload - Naukri.com
 on:
   # ── Scheduled Runs ────────────────────────────────────────
   schedule:
-    - cron: '0 3 * * *'    # 8:30 AM IST → 3:00 AM UTC
-    - cron: '0 10 * * *'   # 3:30 PM IST → 10:00 AM UTC
+    - cron: '0 3 * * *'    # 8:30 AM IST
+    - cron: '0 10 * * *'   # 3:30 PM IST
 
-  # ── Manual Trigger (for testing) ──────────────────────────
+  # ── Manual Trigger ────────────────────────────────────────
   workflow_dispatch:
     inputs:
       run_reason:
@@ -29,73 +20,62 @@ on:
         default: 'Manual trigger'
 
 jobs:
+
+  # ═══════════════════════════════════════════════════════════
+  # Resume Upload Job
+  # ═══════════════════════════════════════════════════════════
+
   update-resume:
     name: 🚀 Upload Resume to Naukri
-    # ── Self-hosted runner on your Windows PC ──────────────
-    # Naukri.com blocks cloud/data center IPs, so we MUST
-    # run from your residential IP via a self-hosted runner.
-    runs-on: self-hosted
-    timeout-minutes: 10
 
-    # All 'run' steps execute inside the cloned repo directory
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
-        shell: cmd
+    # ✅ GitHub Hosted Runner
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    env:
+      CI: true
+      NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
+      NAUKRI_PASSWORD: ${{ secrets.NAUKRI_PASSWORD }}
 
     steps:
-      # ── Step 1: Checkout Code (manual clone) ──────────────
-      # Using manual git clone instead of actions/checkout@v4
-      # because Git for Windows has a known 'dofork' bug with
-      # git-submodule that causes exit code 254 on self-hosted runners.
-      - name: 📥 Checkout repository
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if exist "%GITHUB_WORKSPACE%\.git" (
-            cd "%GITHUB_WORKSPACE%"
-            git remote set-url origin https://x-access-token:%GITHUB_TOKEN%@github.com/%GITHUB_REPOSITORY%.git
-            git fetch --depth 1 origin main
-            git reset --hard origin/main
-            git clean -fdx -e node_modules
-          ) else (
-            git clone --depth 1 https://x-access-token:%GITHUB_TOKEN%@github.com/%GITHUB_REPOSITORY%.git "%GITHUB_WORKSPACE%"
-          )
 
-      # ── Step 2: Setup Node.js ─────────────────────────────
-      - name: 🟢 Setup Node.js 20
+      # ── Step 1: Checkout Repository ──────────────────────
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Step 2: Setup Node.js ────────────────────────────
+      - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      # ── Step 3: Install Dependencies ──────────────────────
-      - name: 📦 Install npm dependencies
+      # ── Step 3: Install Dependencies ─────────────────────
+      - name: 📦 Install dependencies
         run: npm ci
 
-      # ── Step 4: Install Playwright Browsers ───────────────
-      - name: 🌐 Install Playwright browsers
-        run: npx playwright install chromium
+      # ── Step 4: Install Playwright Browsers ──────────────
+      - name: 🌐 Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
 
-      # ── Step 5: Run Resume Upload Test ────────────────────
-      - name: 🎯 Execute resume upload automation
-        env:
-          NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
-          NAUKRI_PASSWORD: ${{ secrets.NAUKRI_PASSWORD }}
+      # ── Step 5: Run Resume Upload Automation ─────────────
+      - name: 🎯 Execute Resume Upload Test
         run: npx playwright test tests/update-resume.spec.ts
 
-      # ── Step 6: Upload Artifacts on Failure ───────────────
+      # ── Step 6: Upload Test Results on Failure ───────────
       - name: 📸 Upload failure screenshots
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: failure-screenshots-${{ github.run_number }}
+          name: failure-artifacts-${{ github.run_number }}
           path: |
             test-results/
             playwright-report/
           retention-days: 7
 
-      # ── Step 7: Upload HTML Report ────────────────────────
-      - name: 📊 Upload Playwright report
+      # ── Step 7: Upload Playwright HTML Report ────────────
+      - name: 📊 Upload Playwright Report
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -104,84 +84,86 @@ jobs:
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
-  # Email Notification Job (runs on GitHub-hosted runner)
+  # Email Notification Job
   # ═══════════════════════════════════════════════════════════
+
   notify:
     name: 📧 Send Email Notification
+
     runs-on: ubuntu-latest
+
     needs: update-resume
+
     if: always()
 
     steps:
-      - name: 📧 Send build status email
+
+      - name: 📧 Send Build Status Email
         uses: dawidd6/action-send-mail@v3
         with:
-          # ── SMTP Configuration (Gmail) ────────────────────
+
+          # ── SMTP Configuration ───────────────────────────
           server_address: smtp.gmail.com
           server_port: 465
           secure: true
+
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
 
-          # ── Email Content ─────────────────────────────────
+          # ── Email Metadata ───────────────────────────────
           subject: |
-            ${{ needs.update-resume.result == 'success' && '✅' || '❌' }} Naukri Resume Upload - ${{ needs.update-resume.result }} | ${{ github.run_number }}
+            ${{ needs.update-resume.result == 'success' && '✅ SUCCESS' || '❌ FAILED' }} | Naukri Resume Upload | Run #${{ github.run_number }}
+
           to: ${{ secrets.EMAIL_USERNAME }}
+
           from: Naukri Bot <${{ secrets.EMAIL_USERNAME }}>
+
+          # ── HTML Email Body ──────────────────────────────
           html_body: |
-            <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              
-              <!-- Header -->
-              <div style="background: ${{ needs.update-resume.result == 'success' && 'linear-gradient(135deg, #00b09b, #96c93d)' || 'linear-gradient(135deg, #e74c3c, #c0392b)' }}; 
-                          border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
-                <h1 style="color: white; margin: 0; font-size: 24px;">
-                  ${{ needs.update-resume.result == 'success' && '✅ Resume Upload Successful!' || '❌ Resume Upload Failed!' }}
-                </h1>
-              </div>
-              
-              <!-- Body -->
-              <div style="background: #f8f9fa; padding: 25px; border: 1px solid #e9ecef; border-radius: 0 0 12px 12px;">
-                
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-                  <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold; width: 40%;">📋 Status</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">
-                      <span style="background: ${{ needs.update-resume.result == 'success' && '#28a745' || '#dc3545' }}; 
-                                   color: white; padding: 4px 12px; border-radius: 20px; font-size: 13px;">
-                        ${{ needs.update-resume.result }}
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold;">📅 Date & Time</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">Run #${{ github.run_number }} on ${{ github.ref_name }}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold;">🔢 Run Number</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">#${{ github.run_number }}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: bold;">🔀 Branch</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">${{ github.ref_name }}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px; font-weight: bold;">⚡ Trigger</td>
-                    <td style="padding: 10px;">${{ github.event_name == 'schedule' && '⏰ Scheduled' || '🖱️ Manual' }}</td>
-                  </tr>
-                </table>
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
 
-                <!-- Action Button -->
-                <div style="text-align: center; margin-top: 15px;">
-                  <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" 
-                     style="background: #0366d6; color: white; padding: 12px 30px; border-radius: 6px; 
-                            text-decoration: none; font-weight: bold; display: inline-block;">
-                    🔗 View Full Run Details
-                  </a>
-                </div>
-              </div>
+              <h2>
+                ${{ needs.update-resume.result == 'success' && '✅ Resume Upload Successful' || '❌ Resume Upload Failed' }}
+              </h2>
 
-              <!-- Footer -->
-              <p style="text-align: center; color: #6c757d; font-size: 12px; margin-top: 15px;">
-                Automated by Naukri Resume Bot • GitHub Actions
-              </p>
+              <table style="border-collapse: collapse; width: 100%;">
+
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ccc;"><b>Status</b></td>
+                  <td style="padding: 10px; border: 1px solid #ccc;">
+                    ${{ needs.update-resume.result }}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ccc;"><b>Run Number</b></td>
+                  <td style="padding: 10px; border: 1px solid #ccc;">
+                    #${{ github.run_number }}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ccc;"><b>Branch</b></td>
+                  <td style="padding: 10px; border: 1px solid #ccc;">
+                    ${{ github.ref_name }}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ccc;"><b>Trigger</b></td>
+                  <td style="padding: 10px; border: 1px solid #ccc;">
+                    ${{ github.event_name }}
+                  </td>
+                </tr>
+
+              </table>
+
+              <br>
+
+              <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                 style="background:#0366d6;color:white;padding:12px 20px;
+                        text-decoration:none;border-radius:5px;">
+                 View Workflow Run
+              </a>
+
             </div>
