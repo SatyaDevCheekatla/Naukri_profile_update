@@ -45,7 +45,14 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { SELECTORS, TIMEOUTS } from '../utils/selectors';
-import { humanDelay, dismissPopups, humanType } from '../utils/helpers';
+import { 
+  humanDelay, 
+  dismissPopups, 
+  humanType, 
+  saveCookies, 
+  loadCookies, 
+  isAuthenticated 
+} from '../utils/helpers';
 
 // ── Load environment variables ───────────────────────────────
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
@@ -137,67 +144,87 @@ test.describe('Naukri.com — Daily Resume Upload', () => {
 
     try {
       // ════════════════════════════════════════════════════
-      //  STEP 2 — Navigate to Login Page
+      //  STEP 1.5 — Try to Load Saved Cookies (for CI/CD)
       // ════════════════════════════════════════════════════
-      console.log('  🔑 Step 2: Navigating to login page...');
+      console.log('\n  🍪 Step 1.5: Checking for saved authentication...');
+      const cookiesLoaded = await loadCookies(context);
 
-      await page.goto(SELECTORS.login.url, {
-        waitUntil: 'domcontentloaded',
-        timeout: TIMEOUTS.navigation,
-      });
+      let skipLogin = false;
+      if (cookiesLoaded) {
+        // Cookies were loaded. Check if we're still authenticated
+        console.log('  🔍 Verifying authentication status...');
+        skipLogin = await isAuthenticated(page);
+      }
 
-      // Wait for the login form to be ready (use 'load' instead of 'networkidle'
-      // because Naukri pages fire continuous analytics/ad requests that prevent
-      // networkidle from ever resolving)
-      await page.waitForLoadState('load', { timeout: TIMEOUTS.navigation });
-      console.log('    ✓ Login page loaded');
-
-      // Dismiss any initial popups (cookie consent, promotions)
-      await dismissPopups(page);
-
-      // ════════════════════════════════════════════════════
-      //  STEP 3 — Enter Credentials & Login
-      // ════════════════════════════════════════════════════
-      console.log('  ✍️  Step 3: Entering credentials...');
-
-      // Wait for the email field to be visible and interactable
-      const emailField = page.locator(SELECTORS.login.emailInput).first();
-      await emailField.waitFor({ state: 'visible', timeout: 15_000 });
-
-      // Type email with human-like speed
-      await humanType(page, SELECTORS.login.emailInput, email);
-      console.log('    ✓ Email entered');
-
-      // Small human delay between fields
-      await humanDelay(page);
-
-      // Type password with human-like speed
-      const passwordField = page.locator(SELECTORS.login.passwordInput).first();
-      await passwordField.waitFor({ state: 'visible', timeout: 10_000 });
-      await humanType(page, SELECTORS.login.passwordInput, password);
-      console.log('    ✓ Password entered');
-
-      // Small delay before clicking login
-      await humanDelay(page);
-
-      // Click the Login button
-      console.log('    🔘 Clicking Login...');
-      const loginBtn = page.locator(SELECTORS.login.loginButton).first();
-      await loginBtn.waitFor({ state: 'visible', timeout: 10_000 });
-      await loginBtn.click();
+      if (skipLogin) {
+        console.log('  ✅ Using saved session! Skipping login.\n');
+      } else {
+        console.log('  ⚠️  Saved session not valid or unavailable. Will login now.\n');
+      }
 
       // ════════════════════════════════════════════════════
-      //  STEP 4 — Wait for Dashboard to Load
+      //  STEP 2 — Navigate to Login Page (if needed)
       // ════════════════════════════════════════════════════
-      console.log('  ⏳ Step 4: Waiting for login to complete...');
+      if (!skipLogin) {
+        console.log('  🔑 Step 2: Navigating to login page...');
 
-      // Wait for navigation away from login page.
-      // After successful login, Naukri redirects to the homepage
-      // or dashboard. We wait for the URL to change.
-      await page.waitForURL('**/homepage**', {
-        timeout: TIMEOUTS.loginCompletion,
-        waitUntil: 'domcontentloaded',
-      }).catch(async () => {
+        await page.goto(SELECTORS.login.url, {
+          waitUntil: 'domcontentloaded',
+          timeout: TIMEOUTS.navigation,
+        });
+
+        // Wait for the login form to be ready (use 'load' instead of 'networkidle'
+        // because Naukri pages fire continuous analytics/ad requests that prevent
+        // networkidle from ever resolving)
+        await page.waitForLoadState('load', { timeout: TIMEOUTS.navigation });
+        console.log('    ✓ Login page loaded');
+
+        // Dismiss any initial popups (cookie consent, promotions)
+        await dismissPopups(page);
+
+        // ════════════════════════════════════════════════════
+        //  STEP 3 — Enter Credentials & Login
+        // ════════════════════════════════════════════════════
+        console.log('  ✍️  Step 3: Entering credentials...');
+
+        // Wait for the email field to be visible and interactable
+        const emailField = page.locator(SELECTORS.login.emailInput).first();
+        await emailField.waitFor({ state: 'visible', timeout: 15_000 });
+
+        // Type email with human-like speed
+        await humanType(page, SELECTORS.login.emailInput, email);
+        console.log('    ✓ Email entered');
+
+        // Small human delay between fields
+        await humanDelay(page);
+
+        // Type password with human-like speed
+        const passwordField = page.locator(SELECTORS.login.passwordInput).first();
+        await passwordField.waitFor({ state: 'visible', timeout: 10_000 });
+        await humanType(page, SELECTORS.login.passwordInput, password);
+        console.log('    ✓ Password entered');
+
+        // Small delay before clicking login
+        await humanDelay(page);
+
+        // Click the Login button
+        console.log('    🔘 Clicking Login...');
+        const loginBtn = page.locator(SELECTORS.login.loginButton).first();
+        await loginBtn.waitFor({ state: 'visible', timeout: 10_000 });
+        await loginBtn.click();
+
+        // ════════════════════════════════════════════════════
+        //  STEP 4 — Wait for Dashboard to Load
+        // ════════════════════════════════════════════════════
+        console.log('  ⏳ Step 4: Waiting for login to complete...');
+
+        // Wait for navigation away from login page.
+        // After successful login, Naukri redirects to the homepage
+        // or dashboard. We wait for the URL to change.
+        await page.waitForURL('**/homepage**', {
+          timeout: TIMEOUTS.loginCompletion,
+          waitUntil: 'domcontentloaded',
+        }).catch(async () => {
         // Sometimes Naukri redirects to a different page after login.
         // Fallback: wait for any URL that is NOT the login page.
         console.log('    ⚠ Homepage redirect not detected, checking alternate URLs...');
@@ -206,16 +233,26 @@ test.describe('Naukri.com — Daily Resume Upload', () => {
         });
       });
 
-      await page.waitForLoadState('load', { timeout: 30_000 });
-      console.log(`    ✓ Login successful! Current URL: ${page.url()}`);
+        await page.waitForLoadState('load', { timeout: 30_000 });
+        console.log(`    ✓ Login successful! Current URL: ${page.url()}`);
 
-      // Dismiss any post-login popups (app install prompts, etc.)
-      await dismissPopups(page);
+        // 💾 Save cookies for next run (in CI environments)
+        await saveCookies(context);
+
+        // Dismiss any post-login popups (app install prompts, etc.)
+        await dismissPopups(page);
+      } else {
+        // Already authenticated via saved cookies
+        console.log('  👤 Step 5: Navigating to profile page (already authenticated)...');
+        await dismissPopups(page);
+      }
 
       // ════════════════════════════════════════════════════
       //  STEP 5 — Navigate to Profile Page
       // ════════════════════════════════════════════════════
-      console.log('  👤 Step 5: Navigating to profile page...');
+      if (skipLogin) {
+        console.log('  👤 Step 5: Navigating to profile page...');
+      }
 
       await page.goto(SELECTORS.profile.url, {
         waitUntil: 'domcontentloaded',
